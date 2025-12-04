@@ -37,6 +37,9 @@ WORKDIR /meshtastic
 # Initialize submodules
 RUN git submodule update --init
 
+# Cache breaker - increment to invalidate cache from this point forward
+ARG CACHE_BUST=1
+
 # Install PlatformIO project dependencies with caching
 # Cache only packages and tools subdirectories (not the entire .platformio to preserve penv)
 # Shared cache across all versions - builds newest to oldest to maximize cache reuse
@@ -48,12 +51,15 @@ RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
     (echo "Final retry..." && sleep 20 && pio pkg install) && \
     # Copy packages and tools from cache mounts to image
-    mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools && \
+    mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools /root/.platformio-image-pio && \
     cp -r /root/.platformio/packages/* /root/.platformio-image-packages/ 2>/dev/null || true && \
-    cp -r /root/.platformio/tools/* /root/.platformio-image-tools/ 2>/dev/null || true
+    cp -r /root/.platformio/tools/* /root/.platformio-image-tools/ 2>/dev/null || true && \
+    cp -r /meshtastic/.pio/* /root/.platformio-image-pio/ 2>/dev/null || true
 
 # Move packages and tools to final location in image
 RUN mkdir -p /root/.platformio && \
     mv /root/.platformio-image-packages /root/.platformio/packages 2>/dev/null || true && \
-    mv /root/.platformio-image-tools /root/.platformio/tools 2>/dev/null || true
+    mv /root/.platformio-image-tools /root/.platformio/tools 2>/dev/null || true && \
+    mv /root/.platformio-image-pio /meshtastic/.pio 2>/dev/null || true
 
+RUN pio run

@@ -72,17 +72,17 @@ function getLatestTag(tags) {
   return validVersions.length > 0 ? [validVersions[0]] : []
 }
 
-async function buildImage(tag, version, buildNum) {
+async function buildImage(tag, version, buildNum, cacheBust) {
   const imageTag = `v${version}-${buildNum}`
   const fullTag = `${IMAGE_NAME}:${imageTag}`
-  const buildArg = `MESHTASTIC_VERSION=${tag}`
+  const buildArgs = ['--build-arg', `MESHTASTIC_VERSION=${tag}`, '--build-arg', `CACHE_BUST=${cacheBust}`]
 
   console.log(`Building ${fullTag}...`)
 
   return new Promise((resolve) => {
     // Enable BuildKit for cache mounts
     const env = { ...process.env, DOCKER_BUILDKIT: '1' }
-    const dockerProcess = spawn(CONTAINER_RUNTIME, ['build', '--build-arg', `${buildArg}`, '-t', `${fullTag}`, '.'], {
+    const dockerProcess = spawn(CONTAINER_RUNTIME, ['build', ...buildArgs, '-t', `${fullTag}`, '.'], {
       env,
     })
 
@@ -116,19 +116,22 @@ async function buildImage(tag, version, buildNum) {
   })
 }
 
-async function buildSequentially(versions, buildNum) {
+async function buildSequentially(versions, buildNum, cacheBust) {
   // Build sequentially (newest to oldest) so cache is shared and reused
   const results = []
   for (const { tag, version } of versions) {
-    const result = await buildImage(tag, version, buildNum)
+    const result = await buildImage(tag, version, buildNum, cacheBust)
     results.push(result)
   }
   return results
 }
 
 async function main() {
-  // Parse command-line argument (default to 'latest')
+  // Parse command-line arguments
+  // argv[2] = semver filter (default: 'latest')
+  // argv[3] = cache bust value (default: timestamp)
   const semverArg = process.argv[2] || 'latest'
+  const cacheBust = process.argv[3] || Date.now().toString()
 
   console.log('Fetching tags from firmware submodule...')
   const tags = await fetchTags()
@@ -156,9 +159,10 @@ async function main() {
 
   console.log(`Building ${filteredVersions.length} images sequentially (newest to oldest) with BUILD_NUM=${BUILD_NUM}`)
   console.log('Versions to build:', filteredVersions.map((v) => v.version).join(', '))
+  console.log(`Cache bust value: ${cacheBust}`)
   console.log('Using shared cache - each version will reuse packages from previous builds')
 
-  const results = await buildSequentially(filteredVersions, BUILD_NUM)
+  const results = await buildSequentially(filteredVersions, BUILD_NUM, cacheBust)
 
   const successful = results.filter((r) => r.success)
   const failed = results.filter((r) => !r.success)
