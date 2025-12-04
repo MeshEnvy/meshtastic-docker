@@ -73,6 +73,26 @@ function getLatestTag(tags) {
   return validVersions.length > 0 ? [validVersions[0]] : []
 }
 
+function getLatestPatchPerMinor(versions) {
+  // Group by major.minor and keep only the latest patch for each minor version
+  // Versions are already sorted newest first, so first occurrence of each major.minor is the latest patch
+  const seen = new Map()
+  const result = []
+
+  for (const { tag, version } of versions) {
+    const parsed = semver.parse(version)
+    if (!parsed) continue
+
+    const minorKey = `${parsed.major}.${parsed.minor}`
+    if (!seen.has(minorKey)) {
+      seen.set(minorKey, true)
+      result.push({ tag, version })
+    }
+  }
+
+  return result
+}
+
 async function buildImage(tag, version, buildNum, cacheBust, cacheCleanup) {
   const imageTag = `v${version}-${buildNum}`
   const fullTag = `${IMAGE_NAME}:${imageTag}`
@@ -138,6 +158,7 @@ async function main() {
     .description('Build Meshtastic Docker images')
     .argument('[semver]', 'Semver filter (e.g., "latest", ">2.5.0")', 'latest')
     .option('--cache-bust <value>', 'Cache bust value (default: 1, use timestamp to invalidate cache)')
+    .option('--all-patches', 'Build all patch versions, not just latest patch per minor version')
     .option(
       '--cache-clean <path>',
       'Path to clean from cache (can be used multiple times)',
@@ -150,6 +171,7 @@ async function main() {
 
   const semverArg = program.args[0] || 'latest'
   const cacheBust = program.opts().cacheBust || '1'
+  const allPatches = program.opts().allPatches || false
   const cacheCleanupPaths = program.opts().cacheClean || []
   const cacheCleanup = cacheCleanupPaths.length > 0 ? cacheCleanupPaths.join(' ') : null
 
@@ -170,6 +192,18 @@ async function main() {
     console.log(`Filtering tags by semver: ${semverArg}`)
     filteredVersions = filterTagsBySemver(tags, semverArg)
     console.log(`Found ${filteredVersions.length} versions matching criteria`)
+
+    // By default, keep only latest patch per minor version unless --all-patches is set
+    if (!allPatches) {
+      const beforeCount = filteredVersions.length
+      filteredVersions = getLatestPatchPerMinor(filteredVersions)
+      const afterCount = filteredVersions.length
+      if (beforeCount > afterCount) {
+        console.log(`Filtered to latest patch per minor version: ${afterCount} versions (from ${beforeCount})`)
+      }
+    } else {
+      console.log('Building all patch versions (--all-patches flag set)')
+    }
   }
 
   if (filteredVersions.length === 0) {
