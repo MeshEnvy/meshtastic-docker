@@ -137,7 +137,7 @@ async function main() {
     .name('build')
     .description('Build Meshtastic Docker images')
     .argument('[semver]', 'Semver filter (e.g., "latest", ">2.5.0")', 'latest')
-    .option('--cache-bust <value>', 'Cache bust value (default: timestamp)')
+    .option('--cache-bust <value>', 'Cache bust value (default: 1, use timestamp to invalidate cache)')
     .option(
       '--cache-clean <path>',
       'Path to clean from cache (can be used multiple times)',
@@ -149,7 +149,7 @@ async function main() {
     .parse(process.argv)
 
   const semverArg = program.args[0] || 'latest'
-  const cacheBust = program.opts().cacheBust || Date.now().toString()
+  const cacheBust = program.opts().cacheBust || '1'
   const cacheCleanupPaths = program.opts().cacheClean || []
   const cacheCleanup = cacheCleanupPaths.length > 0 ? cacheCleanupPaths.join(' ') : null
 
