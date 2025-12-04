@@ -1,0 +1,26 @@
+{
+  "name": "meshtastic-docker",
+  "version": "1.0.0",
+  "description": "Build script for Meshtastic Docker images",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "semver": "^7.5.4"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4"
+  },
+  "type": "module",
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "es5",
+    "printWidth": 120,
+    "tabWidth": 2,
+    "useTabs": false,
+    "semi": false,
+    "bracketSpacing": true,
+    "arrowParens": "always"
+  }
+}
