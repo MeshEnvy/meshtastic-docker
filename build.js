@@ -6,7 +6,6 @@ const execAsync = promisify(exec)
 
 // Constants
 const BUILD_NUM = 1
-const MAX_PARALLEL = 3
 const MIN_VERSION = '>2.5.0'
 const REPO_OWNER = 'meshtastic'
 const REPO_NAME = 'firmware'
@@ -117,13 +116,12 @@ async function buildImage(tag, version, buildNum) {
   })
 }
 
-async function buildInBatches(versions, buildNum, maxParallel) {
+async function buildSequentially(versions, buildNum) {
+  // Build sequentially (newest to oldest) so cache is shared and reused
   const results = []
-  for (let i = 0; i < versions.length; i += maxParallel) {
-    const batch = versions.slice(i, i + maxParallel)
-    const batchPromises = batch.map(({ tag, version }) => buildImage(tag, version, buildNum))
-    const batchResults = await Promise.all(batchPromises)
-    results.push(...batchResults)
+  for (const { tag, version } of versions) {
+    const result = await buildImage(tag, version, buildNum)
+    results.push(result)
   }
   return results
 }
@@ -156,10 +154,11 @@ async function main() {
     return
   }
 
-  console.log(`Building ${filteredVersions.length} images with BUILD_NUM=${BUILD_NUM}, MAX_PARALLEL=${MAX_PARALLEL}`)
+  console.log(`Building ${filteredVersions.length} images sequentially (newest to oldest) with BUILD_NUM=${BUILD_NUM}`)
   console.log('Versions to build:', filteredVersions.map((v) => v.version).join(', '))
+  console.log('Using shared cache - each version will reuse packages from previous builds')
 
-  const results = await buildInBatches(filteredVersions, BUILD_NUM, MAX_PARALLEL)
+  const results = await buildSequentially(filteredVersions, BUILD_NUM)
 
   const successful = results.filter((r) => r.success)
   const failed = results.filter((r) => !r.success)

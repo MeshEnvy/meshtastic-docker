@@ -39,10 +39,10 @@ RUN git submodule update --init
 
 # Install PlatformIO project dependencies with caching
 # Cache only packages and tools subdirectories (not the entire .platformio to preserve penv)
-# Cache project .pio directory for build artifacts (shared for same version)
-RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-${MESHTASTIC_VERSION},sharing=shared \
-    --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-${MESHTASTIC_VERSION},sharing=shared \
-    --mount=type=cache,target=/meshtastic/.pio,id=meshtastic-pio-${MESHTASTIC_VERSION},sharing=shared \
+# Shared cache across all versions - builds newest to oldest to maximize cache reuse
+RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,sharing=shared \
+    --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-shared,sharing=shared \
+    --mount=type=cache,target=/meshtastic/.pio,id=meshtastic-pio-shared,sharing=shared \
     # Install packages (they'll be written to cache mounts)
     pio pkg install || \
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
