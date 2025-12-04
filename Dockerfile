@@ -40,6 +40,10 @@ RUN git submodule update --init
 # Cache breaker - increment to invalidate cache from this point forward
 ARG CACHE_BUST=1
 
+# Cache cleanup - space-separated paths to delete from cache before install
+# Example: --build-arg CACHE_CLEANUP="/root/.platformio/packages/framework-arduinoespressif32/.piopm /root/.platformio/packages/framework-arduinoespressif32"
+ARG CACHE_CLEANUP=""
+
 # Install PlatformIO project dependencies with caching
 # Cache packages, tools, .cache, and project .pio directories
 # Shared cache across all versions - builds newest to oldest to maximize cache reuse
@@ -47,20 +51,28 @@ RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,
     --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-shared,sharing=shared \
     --mount=type=cache,target=/root/.platformio/.cache,id=pio-cache-shared,sharing=shared \
     --mount=type=cache,target=/meshtastic/.pio,id=meshtastic-pio-shared,sharing=shared \
+    # Clean up broken cache entries if specified
+    if [ -n "$CACHE_CLEANUP" ]; then \
+        echo "Cleaning up cache paths: $CACHE_CLEANUP"; \
+        for path in $CACHE_CLEANUP; do \
+            echo "Removing: $path"; \
+            rm -rf "$path" 2>/dev/null || true; \
+        done; \
+    fi && \
     # Install packages (they'll be written to cache mounts)
     pio pkg install || \
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
     (echo "Final retry..." && sleep 20 && pio pkg install) && \
-    # Copy packages and tools from cache mounts to image
+    # Copy packages and tools from cache mounts to temporary location in image
     mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools /root/.platformio-image-pio && \
-    cp -r /root/.platformio/packages/* /root/.platformio-image-packages/ 2>/dev/null || true && \
-    cp -r /root/.platformio/tools/* /root/.platformio-image-tools/ 2>/dev/null || true && \
-    cp -r /meshtastic/.pio/* /root/.platformio-image-pio/ 2>/dev/null || true
+    cp -r /root/.platformio/packages/. /root/.platformio-image-packages/ 2>/dev/null || true && \
+    cp -r /root/.platformio/tools/. /root/.platformio-image-tools/ 2>/dev/null || true && \
+    cp -r /meshtastic/.pio/. /root/.platformio-image-pio/ 2>/dev/null || true
 
-# Move packages and tools to final location in image
-RUN mkdir -p /root/.platformio && \
-    mv /root/.platformio-image-packages /root/.platformio/packages 2>/dev/null || true && \
-    mv /root/.platformio-image-tools /root/.platformio/tools 2>/dev/null || true && \
-    mv /root/.platformio-image-pio /meshtastic/.pio 2>/dev/null || true
+# Copy packages and tools to final location in image (after cache mounts are unmounted)
+RUN mkdir -p /root/.platformio/packages /root/.platformio/tools /meshtastic && \
+    cp -r /root/.platformio-image-packages/. /root/.platformio/packages/ 2>/dev/null || true && \
+    cp -r /root/.platformio-image-tools/. /root/.platformio/tools/ 2>/dev/null || true && \
+    cp -r /root/.platformio-image-pio/. /meshtastic/.pio/ 2>/dev/null || true && 
 
 RUN pio run
