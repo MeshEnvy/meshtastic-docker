@@ -8,6 +8,7 @@
     "bash": "node bash.js"
   },
   "dependencies": {
+    "commander": "^14.0.2",
     "semver": "^7.5.4"
   },
   "devDependencies": {

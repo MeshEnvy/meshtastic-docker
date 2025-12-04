@@ -1,6 +1,7 @@
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import semver from 'semver'
+import { Command } from 'commander'
 
 const execAsync = promisify(exec)
 
@@ -72,10 +73,13 @@ function getLatestTag(tags) {
   return validVersions.length > 0 ? [validVersions[0]] : []
 }
 
-async function buildImage(tag, version, buildNum, cacheBust) {
+async function buildImage(tag, version, buildNum, cacheBust, cacheCleanup) {
   const imageTag = `v${version}-${buildNum}`
   const fullTag = `${IMAGE_NAME}:${imageTag}`
   const buildArgs = ['--build-arg', `MESHTASTIC_VERSION=${tag}`, '--build-arg', `CACHE_BUST=${cacheBust}`]
+  if (cacheCleanup) {
+    buildArgs.push('--build-arg', `CACHE_CLEANUP=${cacheCleanup}`)
+  }
 
   console.log(`Building ${fullTag}...`)
 
@@ -116,22 +120,38 @@ async function buildImage(tag, version, buildNum, cacheBust) {
   })
 }
 
-async function buildSequentially(versions, buildNum, cacheBust) {
+async function buildSequentially(versions, buildNum, cacheBust, cacheCleanup) {
   // Build sequentially (newest to oldest) so cache is shared and reused
   const results = []
   for (const { tag, version } of versions) {
-    const result = await buildImage(tag, version, buildNum, cacheBust)
+    const result = await buildImage(tag, version, buildNum, cacheBust, cacheCleanup)
     results.push(result)
   }
   return results
 }
 
 async function main() {
-  // Parse command-line arguments
-  // argv[2] = semver filter (default: 'latest')
-  // argv[3] = cache bust value (default: timestamp)
-  const semverArg = process.argv[2] || 'latest'
-  const cacheBust = process.argv[3] || Date.now().toString()
+  const program = new Command()
+
+  program
+    .name('build')
+    .description('Build Meshtastic Docker images')
+    .argument('[semver]', 'Semver filter (e.g., "latest", ">2.5.0")', 'latest')
+    .option('--cache-bust <value>', 'Cache bust value (default: timestamp)')
+    .option(
+      '--cache-clean <path>',
+      'Path to clean from cache (can be used multiple times)',
+      (value, previous) => {
+        return previous ? [...previous, value] : [value]
+      },
+      []
+    )
+    .parse(process.argv)
+
+  const semverArg = program.args[0] || 'latest'
+  const cacheBust = program.opts().cacheBust || Date.now().toString()
+  const cacheCleanupPaths = program.opts().cacheClean || []
+  const cacheCleanup = cacheCleanupPaths.length > 0 ? cacheCleanupPaths.join(' ') : null
 
   console.log('Fetching tags from firmware submodule...')
   const tags = await fetchTags()
@@ -160,9 +180,12 @@ async function main() {
   console.log(`Building ${filteredVersions.length} images sequentially (newest to oldest) with BUILD_NUM=${BUILD_NUM}`)
   console.log('Versions to build:', filteredVersions.map((v) => v.version).join(', '))
   console.log(`Cache bust value: ${cacheBust}`)
+  if (cacheCleanup) {
+    console.log(`Cache cleanup paths: ${cacheCleanup}`)
+  }
   console.log('Using shared cache - each version will reuse packages from previous builds')
 
-  const results = await buildSequentially(filteredVersions, BUILD_NUM, cacheBust)
+  const results = await buildSequentially(filteredVersions, BUILD_NUM, cacheBust, cacheCleanup)
 
   const successful = results.filter((r) => r.success)
   const failed = results.filter((r) => !r.success)
