@@ -44,9 +44,7 @@ ARG CACHE_BUST=1
 # Example: --build-arg CACHE_CLEANUP="/root/.platformio/packages/framework-arduinoespressif32/.piopm /root/.platformio/packages/framework-arduinoespressif32"
 ARG CACHE_CLEANUP=""
 
-# Install PlatformIO project dependencies with caching
-# Cache packages, tools, .cache, and project .pio directories
-# Shared cache across all versions - builds newest to oldest to maximize cache reuse
+# Install PlatformIO project dependencies with cache mounts at standard locations
 RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,sharing=shared \
     --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-shared,sharing=shared \
     --mount=type=cache,target=/root/.platformio/.cache,id=pio-cache-shared,sharing=shared \
@@ -64,28 +62,19 @@ RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
     (echo "Final retry..." && sleep 20 && pio pkg install)
 
-# Create temporary directories for copying from cache mounts
-RUN mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools /root/.platformio-image-pio
+# Copy from cache mounts (mounted at alternate locations) directly to final locations
+# Single copy operation per directory - no intermediate steps or moves
+RUN --mount=type=cache,target=/cache/packages,id=pio-packages-shared,sharing=shared \
+    --mount=type=cache,target=/cache/tools,id=pio-tools-shared,sharing=shared \
+    --mount=type=cache,target=/cache/pio-cache,id=pio-cache-shared,sharing=shared \
+    --mount=type=cache,target=/cache/meshtastic-pio,id=meshtastic-pio-shared,sharing=shared \
+    mkdir -p /root/.platformio /meshtastic && \
+    cp -r /cache/packages /root/.platformio/packages && \
+    cp -r /cache/tools /root/.platformio/tools && \
+    cp -r /cache/pio-cache /root/.platformio/.cache && \
+    cp -r /cache/meshtastic-pio /meshtastic/.pio 
 
-# Copy packages from cache mount to temporary location
-RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,sharing=shared \
-    cp -r /root/.platformio/packages/. /root/.platformio-image-packages/ 2>/dev/null || true
-
-# Copy tools from cache mount to temporary location
-RUN --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-shared,sharing=shared \
-    cp -r /root/.platformio/tools/. /root/.platformio-image-tools/ 2>/dev/null || true
-
-# Copy .pio from cache mount to temporary location
-RUN --mount=type=cache,target=/meshtastic/.pio,id=meshtastic-pio-shared,sharing=shared \
-    cp -r /meshtastic/.pio/. /root/.platformio-image-pio/ 2>/dev/null || true
-
-# Remove existing packages directory and move packages to final location
-RUN mv /root/.platformio-image-packages /root/.platformio/packages
-
-# Remove existing tools directory and move tools to final location
-RUN mv /root/.platformio-image-tools /root/.platformio/tools
-
-# Remove existing .pio directory and move .pio to final location
-RUN mv /root/.platformio-image-pio /meshtastic/.pio 
+# Add ls alias
+RUN echo "alias ls='ls -lah'" >> /root/.bashrc
 
 # RUN pio run
