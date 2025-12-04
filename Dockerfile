@@ -46,5 +46,14 @@ RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-${MESHT
     # Install packages (they'll be written to cache mounts)
     pio pkg install || \
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
-    (echo "Final retry..." && sleep 20 && pio pkg install)
+    (echo "Final retry..." && sleep 20 && pio pkg install) && \
+    # Copy packages and tools from cache mounts to image
+    mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools && \
+    cp -r /root/.platformio/packages/* /root/.platformio-image-packages/ 2>/dev/null || true && \
+    cp -r /root/.platformio/tools/* /root/.platformio-image-tools/ 2>/dev/null || true
+
+# Move packages and tools to final location in image
+RUN mkdir -p /root/.platformio && \
+    mv /root/.platformio-image-packages /root/.platformio/packages 2>/dev/null || true && \
+    mv /root/.platformio-image-tools /root/.platformio/tools 2>/dev/null || true
 
