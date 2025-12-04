@@ -62,17 +62,30 @@ RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,
     # Install packages (they'll be written to cache mounts)
     pio pkg install || \
     (echo "Retrying package install..." && sleep 10 && pio pkg install) || \
-    (echo "Final retry..." && sleep 20 && pio pkg install) && \
-    # Copy packages and tools from cache mounts to temporary location in image
-    mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools /root/.platformio-image-pio && \
-    cp -r /root/.platformio/packages/. /root/.platformio-image-packages/ 2>/dev/null || true && \
-    cp -r /root/.platformio/tools/. /root/.platformio-image-tools/ 2>/dev/null || true && \
+    (echo "Final retry..." && sleep 20 && pio pkg install)
+
+# Create temporary directories for copying from cache mounts
+RUN mkdir -p /root/.platformio-image-packages /root/.platformio-image-tools /root/.platformio-image-pio
+
+# Copy packages from cache mount to temporary location
+RUN --mount=type=cache,target=/root/.platformio/packages,id=pio-packages-shared,sharing=shared \
+    cp -r /root/.platformio/packages/. /root/.platformio-image-packages/ 2>/dev/null || true
+
+# Copy tools from cache mount to temporary location
+RUN --mount=type=cache,target=/root/.platformio/tools,id=pio-tools-shared,sharing=shared \
+    cp -r /root/.platformio/tools/. /root/.platformio-image-tools/ 2>/dev/null || true
+
+# Copy .pio from cache mount to temporary location
+RUN --mount=type=cache,target=/meshtastic/.pio,id=meshtastic-pio-shared,sharing=shared \
     cp -r /meshtastic/.pio/. /root/.platformio-image-pio/ 2>/dev/null || true
 
-# Copy packages and tools to final location in image (after cache mounts are unmounted)
-RUN mkdir -p /root/.platformio/packages /root/.platformio/tools /meshtastic && \
-    cp -r /root/.platformio-image-packages/. /root/.platformio/packages/ 2>/dev/null || true && \
-    cp -r /root/.platformio-image-tools/. /root/.platformio/tools/ 2>/dev/null || true && \
-    cp -r /root/.platformio-image-pio/. /meshtastic/.pio/ 2>/dev/null || true && 
+# Remove existing packages directory and move packages to final location
+RUN mv /root/.platformio-image-packages /root/.platformio/packages
 
-RUN pio run
+# Remove existing tools directory and move tools to final location
+RUN mv /root/.platformio-image-tools /root/.platformio/tools
+
+# Remove existing .pio directory and move .pio to final location
+RUN mv /root/.platformio-image-pio /meshtastic/.pio 
+
+# RUN pio run
