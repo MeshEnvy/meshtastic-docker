@@ -10,7 +10,7 @@ const BUILD_NUM = 1
 const MIN_VERSION = '>2.5.0'
 const REPO_OWNER = 'meshtastic'
 const REPO_NAME = 'firmware'
-const IMAGE_NAME = 'meshtastic-docker'
+const IMAGE_NAME = 'benallfree/meshtastic-docker'
 // Container runtime: 'docker' or 'podman'
 const CONTAINER_RUNTIME = 'docker'
 
